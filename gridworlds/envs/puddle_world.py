@@ -1,9 +1,9 @@
 import numpy as np
-
+import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
 
-import pickle
+import pickle,os
 
 def categorical_sample(prob_n, np_random):
     """
@@ -13,54 +13,6 @@ def categorical_sample(prob_n, np_random):
     prob_n = np.asarray(prob_n)
     csprob_n = np.cumsum(prob_n)
     return (csprob_n > np_random.rand()).argmax()
-
-
-class DiscreteEnv(Env):
-
-    """
-    Has the following members
-    - nS: number of states
-    - nA: number of actions
-    - P: transitions (*)
-    - isd: initial state distribution (**)
-
-    (*) dictionary dict of dicts of lists, where
-      P[s][a] == [(probability, nextstate, reward, done), ...]
-    (**) list or array of length nS
-
-
-    """
-    def __init__(self, nS, nA, P, isd):
-        self.P = P
-        self.isd = isd
-        self.lastaction=None # for rendering
-        self.nS = nS
-        self.nA = nA
-
-        self.action_space = spaces.Discrete(self.nA)
-        self.observation_space = spaces.Discrete(self.nS)
-
-        self._seed()
-        self._reset()
-
-    def _seed(self, seed=None):
-        self.np_random, seed = seeding.np_random(seed)
-        return [seed]
-
-    def _reset(self):
-        self.s = categorical_sample(self.isd, self.np_random)
-        self.lastaction=None
-        return self.s
-
-    def _step(self, a):
-        transitions = self.P[self.s][a]
-        i = categorical_sample([t[0] for t in transitions], self.np_random)
-        p, s, r, d= transitions[i]
-        self.s = s
-        self.lastaction=a
-        return (s, r, d, {"prob" : p})
-
-
 
 
 UP = 0
@@ -80,15 +32,15 @@ puddle_dict = {i:j for i,j in zip(WORLD_PUDDLE,puddle_rewards)}
 class PuddleWorld(gym.Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, n=10, noise=0.1, terminal_reward=1.0, 
-            border_reward=0.0, step_reward=0.0, start_state=0, 
-            bump_reward = -0.5, terminal_state_offset=11, world_file_path = None): #'random'):
+    def __init__(self, n=14, noise=0.1, terminal_reward=10, 
+            border_reward=0.0, step_reward=-0.1, start_state=0, wind = 0.5, confusion = 0,
+            bump_reward = -0.5, start_states = None,world_file_path = None): #'random'):
         '''
         map = 2D Array with elements indicating type of tile.
         '''
         def load_map(self, fileName):
             theFile = open(fileName, "r")
-            self.map = pickle.load(theFile)
+            self.map = np.array(pickle.load(theFile))
             theFile.close()
         # Load a map 
         assert(world_file_path is not None)
@@ -101,25 +53,35 @@ class PuddleWorld(gym.Env):
                     world_file_path = rel_path
                 else:
                     raise FileExistsError("Cannot find %s." % world_file_path)
-            load_map(world_file_path)
+            load_map(self,world_file_path)
+            print "\nFound Saved Map\n"
         
 
-        self.tile_ids = {WORLD_FREE:step_reward,WORLD_OBSTACLE:bump_reward,WORLD_GOAL:terminal_reward}
+        self.tile_ids = {WORLD_FREE:step_reward,WORLD_OBSTACLE:border_reward,WORLD_GOAL:terminal_reward}
         self.tile_ids.update(puddle_dict)
 
         self.n = n
         self.noise = noise
+        self.confusion = confusion
         self.terminal_reward = terminal_reward
         self.border_reward = border_reward
         self.bump_reward = bump_reward
         self.step_reward = step_reward
         self.n_states = self.n ** 2 + 1
-        self.terminal_state = self.n_states - 2 - terminal_state_offset
+        self.terminal_state = None
+        for i in xrange(self.n_states-1):
+            if self.map.take(i) == WORLD_GOAL:
+                self.terminal_state = i
+                break
+        assert(self.terminal_state is not None)
+
+        # self.terminal_state = self.n_states - 2 - terminal_state_offset
         self.absorbing_state = self.n_states - 1
         self.done = False
-        self.start_state = start_state #if not isinstance(start_state, str) else np.random.rand(n**2)
-        
 
+        if start_states is None:
+            self.start_states = [[6, 1], [7, 1], [11, 1], [12, 1]]
+        self.start_state = self.coord2ind(self.start_states[start_state])
 
         # Simulation related variables
         self._reset()
@@ -141,6 +103,12 @@ class PuddleWorld(gym.Env):
 
         if np.random.rand() < self.noise:
             action = self.action_space.sample()
+        
+        if(np.random.rand() < self.confusion):  # if confused, then pick action apart from that specified
+            rand_act = self.action_space.sample()
+            while rand_act == action:
+                rand_act = self.action_space.sample()
+            action = rand_act
 
         if action == UP:
             row = max(row - 1, 0)
@@ -163,13 +131,15 @@ class PuddleWorld(gym.Env):
         if self.done:
             return self.terminal_reward
 
-        reward = self.step_reward
+        reward = self.tile_ids[self.map.take(new_state)] # Use the reward dictionary to give reward based on tile
 
-        if self.border_reward != 0 and self.at_border():
-            reward = self.border_reward
+        # reward = self.step_reward
 
-        if self.bump_reward != 0 and self.state == new_state:
-            reward = self.bump_reward
+        # if self.border_reward != 0 and self.at_border():
+        #     reward = self.border_reward
+
+        # if self.bump_reward != 0 and self.state == new_state:
+        #     reward = self.bump_reward
 
         return reward
 
