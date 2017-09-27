@@ -32,15 +32,16 @@ puddle_dict = {i:j for i,j in zip(WORLD_PUDDLE,puddle_rewards)}
 class PuddleWorld(gym.Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, n=14, noise=0.1, terminal_reward=10, 
-            border_reward=0.0, step_reward=-0.1, start_state=0, wind = 0.5, confusion = 0,
-            bump_reward = -0.5, start_states = None,world_file_path = None): #'random'):
+    def __init__(self, n=14, noise=0.0, terminal_reward=10, 
+            border_reward=0.0, step_reward=-0.1, start_state_ind=None, wind = 0.5, confusion = 0,
+            bump_reward =-0.5, start_states = None,world_file_path = None): #'random'):
         '''
         map = 2D Array with elements indicating type of tile.
         '''
         def load_map(self, fileName):
-            theFile = open(fileName, "r")
+            theFile = open(fileName, "rb")
             self.map = np.array(pickle.load(theFile))
+            self.n = self.map.shape[0]
             theFile.close()
         # Load a map 
         assert(world_file_path is not None)
@@ -54,13 +55,13 @@ class PuddleWorld(gym.Env):
                 else:
                     raise FileExistsError("Cannot find %s." % world_file_path)
             load_map(self,world_file_path)
-            print "\nFound Saved Map\n"
+            print("\nFound Saved Map\n")
         
 
-        self.tile_ids = {WORLD_FREE:step_reward,WORLD_OBSTACLE:border_reward,WORLD_GOAL:terminal_reward}
+        self.tile_ids = {WORLD_FREE:step_reward,WORLD_OBSTACLE:bump_reward,WORLD_GOAL:terminal_reward}
         self.tile_ids.update(puddle_dict)
 
-        self.n = n
+        # self.n = n # Uncomment when not loading map
         self.noise = noise
         self.confusion = confusion
         self.terminal_reward = terminal_reward
@@ -69,9 +70,9 @@ class PuddleWorld(gym.Env):
         self.step_reward = step_reward
         self.n_states = self.n ** 2 + 1
         self.terminal_state = None
-        for i in xrange(self.n_states-1):
-            if self.map.take(i) == WORLD_GOAL:
-                self.terminal_state = i
+        for i in range(self.n_states-1):
+            if self.map.T.take(i) == WORLD_GOAL: #T for column wise indexing
+                self.terminal_state = i # assumes only one goal state.
                 break
         assert(self.terminal_state is not None)
 
@@ -81,13 +82,15 @@ class PuddleWorld(gym.Env):
 
         if start_states is None:
             self.start_states = [[6, 1], [7, 1], [11, 1], [12, 1]]
-        self.start_state = self.coord2ind(self.start_states[start_state])
+            self.start_state_ind = start_state_ind
+        
 
         # Simulation related variables
         self._reset()
         self._seed()
 
         self.action_space = spaces.Discrete(4)
+        # self.observation_space = spaces.Box(low=np.zeros(2), high=np.zeros(2)+n-1) # use wrapper instead
         self.observation_space = spaces.Discrete(self.n_states) # with absorbing state
         #self._seed()
 
@@ -95,13 +98,13 @@ class PuddleWorld(gym.Env):
         assert self.action_space.contains(action)
 
         if self.state == self.terminal_state:
-            self.state = self.absorbing_state
+            self.state = self.absorbing_state #Careful now, don't run env. without resetting
             self.done = True
             return self.state, self._get_reward(), self.done, None
 
         [row, col] = self.ind2coord(self.state)
 
-        if np.random.rand() < self.noise:
+        if np.random.rand() < self.noise: # Randomnly pick an action
             action = self.action_space.sample()
         
         if(np.random.rand() < self.confusion):  # if confused, then pick action apart from that specified
@@ -121,6 +124,10 @@ class PuddleWorld(gym.Env):
 
         new_state = self.coord2ind([row, col])
 
+        # Check if new state is an obstacle
+        if(self.map.T.take(new_state) == WORLD_OBSTACLE):
+            new_state = self.state # State remains unchanged
+
         reward = self._get_reward(new_state=new_state)
 
         self.state = new_state
@@ -131,7 +138,7 @@ class PuddleWorld(gym.Env):
         if self.done:
             return self.terminal_reward
 
-        reward = self.tile_ids[self.map.take(new_state)] # Use the reward dictionary to give reward based on tile
+        reward = self.tile_ids[self.map.T.take(new_state)] # Use the reward dictionary to give reward based on tile
 
         # reward = self.step_reward
 
@@ -166,7 +173,12 @@ class PuddleWorld(gym.Env):
 
 
     def _reset(self):
-        self.state = self.start_state if not isinstance(self.start_state, str) else np.random.randint(self.n_states - 1)
+        if(self.start_state_ind is None):
+            start_state_ind = np.random.randint(len(self.start_states))
+        else:
+            start_state_ind = self.start_state_ind
+        self.start_state = self.coord2ind(self.start_states[start_state_ind])
+        self.state = self.start_state #if not isinstance(self.start_state, str) else np.random.randint(self.n_states - 1)
         self.done = False
         return self.state
 
