@@ -33,7 +33,7 @@ class PuddleWorld(gym.Env):
     metadata = {'render.modes': ['human']}
 
     def __init__(self, n=14, noise=0.0, terminal_reward=10, 
-            border_reward=0.0, step_reward=-0.1, start_state_ind=None, wind = 0.5, confusion = 0,
+            border_reward=0.0, step_reward=-0.1, start_state_ind=None, wind = 0.5, confusion = 0.1,
             bump_reward =-0.5, start_states = None,world_file_path = None): #'random'):
         '''
         map = 2D Array with elements indicating type of tile.
@@ -70,6 +70,8 @@ class PuddleWorld(gym.Env):
         self.step_reward = step_reward
         self.n_states = self.n ** 2 + 1
         self.terminal_state = None
+
+        # Can speed up finding Goal using np.where()
         for i in range(self.n_states-1):
             if self.map.T.take(i) == WORLD_GOAL: #T for column wise indexing
                 self.terminal_state = i # assumes only one goal state.
@@ -104,12 +106,12 @@ class PuddleWorld(gym.Env):
 
         [row, col] = self.ind2coord(self.state)
 
-        if np.random.rand() < self.noise: # Randomnly pick an action
+        if np.random.rand() < self.noise: # Randomly pick an action
             action = self.action_space.sample()
         
         if(np.random.rand() < self.confusion):  # if confused, then pick action apart from that specified
             rand_act = self.action_space.sample()
-            while rand_act == action:
+            while rand_act == action: # while action is the same as picked, keep sampling
                 rand_act = self.action_space.sample()
             action = rand_act
 
@@ -145,10 +147,23 @@ class PuddleWorld(gym.Env):
         # if self.border_reward != 0 and self.at_border():
         #     reward = self.border_reward
 
-        # if self.bump_reward != 0 and self.state == new_state:
+        #Uncomment to add bump-reward
+        # if self.bump_reward != 0 and self.state == new_state: 
         #     reward = self.bump_reward
 
         return reward
+
+    def change_reward(self, step_reward = None, bump_reward = None, terminal_reward = None):
+        # For easy change of step_reward,etc
+        if(step_reward is None):
+            step_reward = self.step_reward
+        if(bump_reward is None):
+            bump_reward = self.bump_reward
+        if(terminal_reward is None):
+            terminal_reward = self.terminal_reward
+        self.tile_ids = {WORLD_FREE:step_reward,WORLD_OBSTACLE:bump_reward,WORLD_GOAL:terminal_reward}
+        self.tile_ids.update(puddle_dict)
+        pass
 
     def at_border(self):
         [row, col] = self.ind2coord(self.state)
