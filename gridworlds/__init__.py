@@ -39,3 +39,21 @@ register(
     entry_point='gridworlds.envs:PuddleWorldC',
     max_episode_steps=100000,
 )
+
+register(
+    id='PuddleWorldST1-v0',
+    entry_point='gridworlds.envs:PuddleWorld_st1',
+    max_episode_steps=100000,
+)
+
+register(
+    id='PuddleWorldST2-v0',
+    entry_point='gridworlds.envs:PuddleWorld_st2',
+    max_episode_steps=100000,
+)
+
+register(
+    id='PuddleWorldA2T-v0',
+    entry_point='gridworlds.envs:PuddleWorld_a2t',
+    max_episode_steps=100000,
+)

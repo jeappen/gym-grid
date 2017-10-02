@@ -33,7 +33,7 @@ class PuddleWorld(gym.Env):
     metadata = {'render.modes': ['human']}
 
     def __init__(self, n=14, noise=0.0, terminal_reward=10, 
-            border_reward=0.0, step_reward=-0.1, start_state_ind=None, wind = 0.5, confusion = 0.1,
+            border_reward=0.0, step_reward=-0.2, start_state_ind=None, wind = 0.5, confusion = 0.1,
             bump_reward =-0.5, start_states = None,world_file_path = None): #'random'):
         '''
         map = 2D Array with elements indicating type of tile.
@@ -159,7 +159,7 @@ class PuddleWorld(gym.Env):
         
         view = self.map[up:down+1, left:right+1]
 
-        #modify view here (color-code, etc)
+        # modify view here (different channels, color-code, etc)
         # view[view!=WORLD_OBSTACLE] = 0
         # view[view!=WORLD_GOAL] = -1
 
@@ -247,3 +247,18 @@ class PuddleWorldC(PuddleWorld):
 
     def __init__(self):
         super(PuddleWorldC, self).__init__(world_file_path="PuddleWorldC.dat")
+
+class PuddleWorld_st1(PuddleWorld):
+# puddle world sub task 1
+    def __init__(self):
+        super(PuddleWorld_st1, self).__init__(world_file_path="PW_st1.dat")
+
+class PuddleWorld_st2(PuddleWorld):
+# puddle world sub task 2
+    def __init__(self):
+        super(PuddleWorld_st2, self).__init__(world_file_path="PW_st2.dat")
+
+class PuddleWorld_a2t(PuddleWorld):
+# puddle world as in a2t paper
+    def __init__(self):
+        super(PuddleWorld_a2t, self).__init__(world_file_path="PW_a2t.dat")
