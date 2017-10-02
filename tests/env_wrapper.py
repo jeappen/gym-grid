@@ -16,6 +16,34 @@ from gym.spaces.box import Box
 import gym
 import time, sys
 
+class SquareView_grid(gym.ObservationWrapper):
+    """
+    Convert observation (row,col) in gridworld to Square View around it
+    """
+    def __init__(self, env=None, n = None):
+        super(SquareView_grid, self).__init__(env)
+        if(n is None):
+            n = 1
+        self.n = n
+        view_size = (1+2*n,1+2*n)
+        view_codes = 10 # number of types of tiles in view
+        self.observation_space = Box(low=np.zeros(view_size), high=np.zeros(view_size)+view_codes)
+
+    def _step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        return self._observation(obs), reward, done, info
+
+    def _observation(self, obs):
+        obs = self._convert(obs)
+        return obs
+    def _reset(self):
+        obs = self._convert(self.env.reset())
+        return obs
+
+    def _convert(self, obs):
+        return self.env.unwrapped._get_view(obs,self.n)
+
+
 class discObs2Box_grid(gym.ObservationWrapper):
     """
     Convert discrete observation in gridworld to Box (X,Y) coordinates.

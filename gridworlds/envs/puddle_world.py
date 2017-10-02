@@ -134,7 +134,36 @@ class PuddleWorld(gym.Env):
 
         self.state = new_state
 
+        # Set self.done at end of step
+        if self.state == self.terminal_state:
+            self.done = True
+            return self.state, self._get_reward(), self.done, None
+
         return self.state, reward, self.done, None
+
+    def _get_view(self, state=None, n=None):
+        # get view of n steps around
+        # input: state: (row,col)
+
+        if(state is None):
+            state = self.state
+        if(n is None):
+            n = 1
+
+        row,col = state
+
+        up = max(row - n, 0)
+        down = min(row + n, self.n - 1)
+        left = max(col - n, 0)
+        right = min(col + n, self.n - 1)
+        
+        view = self.map[up:down+1, left:right+1]
+
+        #modify view here (color-code, etc)
+        # view[view!=WORLD_OBSTACLE] = 0
+        # view[view!=WORLD_GOAL] = -1
+
+        return view
 
     def _get_reward(self, new_state=None):
         if self.done:

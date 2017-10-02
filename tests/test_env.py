@@ -1,7 +1,8 @@
 import gym
 import gridworlds
-from env_wrapper import discObs2Box_grid,ChangePerStepReward_grid
+from env_wrapper import discObs2Box_grid,ChangePerStepReward_grid,SquareView_grid
 
 env = gym.make('PuddleWorldB-v0')
 we = discObs2Box_grid(env) #wrapped environment
-we.env.unwrapped.tile_ids[0] = -.2
+se = SquareView_grid(we)
+# we.env.unwrapped.tile_ids[0] = -.2
