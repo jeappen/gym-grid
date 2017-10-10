@@ -141,7 +141,7 @@ class PuddleWorld(gym.Env):
 
         return self.state, reward, self.done, None
 
-    def _get_view(self, state=None, n=None):
+    def _get_view(self, state=None, n=None, split_view = None):
         # get view of n steps around
         # input: state: (row,col)
 
@@ -149,6 +149,8 @@ class PuddleWorld(gym.Env):
             state = self.state
         if(n is None):
             n = 1
+        if(split_view is None):
+            split_view = False
 
         row,col = state
 
@@ -160,10 +162,17 @@ class PuddleWorld(gym.Env):
         view = self.map[up:down+1, left:right+1]
 
         # modify view here (different channels, color-code, etc)
-        # view[view!=WORLD_OBSTACLE] = 0
-        # view[view!=WORLD_GOAL] = -1
+        # Can divide into three channels. 1* to make it 0-1
+        bad_c = 1*np.any([(view == x) for x in WORLD_PUDDLE+[WORLD_MINE]],axis=0)
+        good_c = 1*(view == WORLD_GOAL)
+        neutral_c = 1*(view == WORLD_OBSTACLE)
+        new_view = -1*bad_c + 1*neutral_c + 2*good_c # can return this
+        view_channels = np.array([bad_c,neutral_c,good_c]) # or this without loss of generality
 
-        return view
+        if(split_view):
+            return view_channels
+        else:
+            return view
 
     def _get_reward(self, new_state=None):
         if self.done:

@@ -41,7 +41,9 @@ class SquareView_grid(gym.ObservationWrapper):
         return obs
 
     def _convert(self, obs):
-        return self.env.unwrapped._get_view(obs,self.n)
+        view = self.env.unwrapped._get_view(obs,self.n,split_view=True)
+        view = -1*view[0] + 1*view[1] + 2*view[2] #flatten out the view
+        return view
 
 
 class discObs2Box_grid(gym.ObservationWrapper):
