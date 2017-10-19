@@ -20,11 +20,14 @@ class SquareView_grid(gym.ObservationWrapper):
     """
     Convert observation (row,col) in gridworld to Square View around it
     """
-    def __init__(self, env=None, n = None):
+    def __init__(self, env=None, n = None, split_view = None):
         super(SquareView_grid, self).__init__(env)
         if(n is None):
             n = 1
+        if(split_view is None):
+            split_view = False
         self.n = n
+        self.split_view = split_view
         view_size = (1+2*n,1+2*n)
         view_codes = 10 # number of types of tiles in view
         self.observation_space = Box(low=np.zeros(view_size), high=np.zeros(view_size)+view_codes)
@@ -41,8 +44,9 @@ class SquareView_grid(gym.ObservationWrapper):
         return obs
 
     def _convert(self, obs):
-        view = self.env.unwrapped._get_view(obs,self.n,split_view=True)
-        view = -1*view[0] + 1*view[1] + 2*view[2] #flatten out the view
+        view = self.env.unwrapped._get_view(obs,self.n,self.split_view)
+        if(self.split_view):
+            view = np.array([-1*view[0] + 1*view[1] , view[2]]) #flatten out the view
         return view
 
 

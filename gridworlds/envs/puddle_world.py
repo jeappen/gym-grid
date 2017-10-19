@@ -158,8 +158,16 @@ class PuddleWorld(gym.Env):
         down = min(row + n, self.n - 1)
         left = max(col - n, 0)
         right = min(col + n, self.n - 1)
-        
-        view = self.map[up:down+1, left:right+1]
+
+        view_patch = self.map[up:down+1, left:right+1]
+
+        view = np.zeros((2*n+1,2*n+1))
+        view_up = max(0, n-row)
+        view_down = min(self.n -1 - row + n,2*n)
+        view_left = max(0, n-col)
+        view_right = min(self.n -1 - col + n,2*n)
+
+        view[view_up:view_down+1, view_left:view_right+1] = view_patch # handles cases where n size gives window off the map
 
         # modify view here (different channels, color-code, etc)
         # Can divide into three channels. 1* to make it 0-1
