@@ -57,3 +57,17 @@ register(
     entry_point='gridworlds.envs:PuddleWorld_a2t',
     max_episode_steps=100000,
 )
+
+register(
+    id='MineWorldRandomSmall-v0',
+    entry_point='gridworlds.envs:PuddleWorld_random',
+    max_episode_steps=30,
+    kwargs = {'n':14}
+)
+
+register(
+    id='MineWorldRandomBig-v0',
+    entry_point='gridworlds.envs:PuddleWorld_random',
+    max_episode_steps=60,
+    kwargs = {'n':28}
+)
