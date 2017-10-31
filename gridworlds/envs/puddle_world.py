@@ -321,6 +321,13 @@ class PuddleWorld_random(PuddleWorld):
         for i,j in m_ind: m[i,j] = WORLD_MINE
         m[0,:] =  m[-1,:] =  m[:,0] = m[:,-1] = WORLD_OBSTACLE # Make Walls
         return m
+
     def reload_random(self):
         m = self.load_random_map()
         self.map = m
+
+    
+    def _reset(self):
+        #Randomising map at each run
+        self.reload_random(); 
+        return super(PuddleWorld_random, self)._reset()
