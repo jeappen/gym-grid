@@ -71,3 +71,17 @@ register(
     max_episode_steps=60,
     kwargs = {'n':28}
 )
+
+register(
+    id='RoomWorld-v0',
+    entry_point='gridworlds.envs:RoomWorld',
+    max_episode_steps=100000,
+    kwargs = {'n':14}
+)
+
+register(
+    id='RoomWorldExit-v0',
+    entry_point='gridworlds.envs:RoomWorld',
+    max_episode_steps=100000,
+    kwargs = {'n':14,'mode':'exit'}
+)
