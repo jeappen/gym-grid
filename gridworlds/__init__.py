@@ -85,3 +85,17 @@ register(
     max_episode_steps=100000,
     kwargs = {'n':14,'mode':'exit'}
 )
+
+register(
+    id='RoomWorldObjectSmall-v0',
+    entry_point='gridworlds.envs:RoomWorldObject',
+    max_episode_steps=100000,
+    kwargs = {'n':14}
+)
+
+register(
+    id='RoomWorldObjectBig-v0',
+    entry_point='gridworlds.envs:RoomWorldObject',
+    max_episode_steps=100000,
+    kwargs = {'n':28}
+)
