@@ -424,9 +424,9 @@ class RoomWorld(PuddleWorld):
         return super(RoomWorld, self)._reset()
 
 class RoomWorldObject(PuddleWorld):
-''' Bounded 2 Rooms w/exit. Need to pick up all fruits and reach gap to complete task
-Hard task for large n! Without a non-markovian policy, will need to square view large 
-(to keep fruits in view, thus the agent realising there's work to be done before leaving) '''
+    ''' Bounded 2 Rooms w/exit. Need to pick up all fruits and reach gap to complete task
+    Hard task for large n! Without a non-markovian policy, will need to square view large 
+    (to keep fruits in view, thus the agent realising there's work to be done before leaving) '''
     def __init__(self, n = None, objects = None, mode = None):
         # mode : 'fruit' - learn to pick up fruit, 'exit' - learn to exit room
         if(n is None): # n >= 5
@@ -454,7 +454,7 @@ Hard task for large n! Without a non-markovian policy, will need to square view 
         m = np.zeros((self.n,self.n))
 
         m[0,:] =  m[-1,:] =  m[:,0] = m[:,-1] = WORLD_OBSTACLE # Make Walls
-        i,j =  np.random.randint(1,self.n-1),np.random.randint(self.n-4,self.n-2) # pick random row and col to make exit between rooms
+        i,j =  np.random.randint(1,self.n-1),np.random.randint(self.n-5,self.n-3) # pick random row and col to make exit between rooms
         m[:,j] = WORLD_OBSTACLE # Makes intersecting wall
         m[i,j] = WORLD_FREE # Makes gap between rooms
 
@@ -516,9 +516,9 @@ Hard task for large n! Without a non-markovian policy, will need to square view 
 
 
 class RoomWorldFinal(PuddleWorld):
-''' Set of 6 rooms. Need to pick up all fruits and reach gap to complete task
-Hard task for large n! Without a non-markovian policy, will need to square view large 
-(to keep fruits in view, thus the agent realising there's work to be done before leaving)  '''
+    ''' Set of 6 rooms. Need to pick up all fruits and reach gap to complete task
+    Hard task for large n! Without a non-markovian policy, will need to square view large 
+    (to keep fruits in view, thus the agent realising there's work to be done before leaving)  '''
     def __init__(self, n = None, objects = None, mode = None):
         # mode : 'fruit' - learn to pick up fruit, 'exit' - learn to exit room
         if(n is None): # n >= 5
