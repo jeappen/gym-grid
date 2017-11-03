@@ -541,7 +541,7 @@ class RoomWorldFinal(PuddleWorld):
         m[2,2] = m[24,2] = m[1,15] = m[2,27] = m[25,27] = WORLD_FRUIT
 
         m[0,:] =  m[-1,:] =  m[:,0] = m[:,-1] = WORLD_OBSTACLE # Make Walls
-s
+        
         self.num_fruits_left = 5
 
         return m
