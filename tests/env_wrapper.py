@@ -46,7 +46,7 @@ class SquareView_grid(gym.ObservationWrapper):
     def _convert(self, obs):
         view = self.env.unwrapped._get_view(obs,self.n,self.split_view)
         if(self.split_view):
-            view = np.array([-1*view[0] + 1*view[1] , view[2]]) #flatten out the view
+            view = np.array([-1*view[0] + 1*view[1] + 3*view[2]]) #flatten out the view
         return view
 
 

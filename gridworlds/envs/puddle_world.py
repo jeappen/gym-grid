@@ -517,91 +517,39 @@ class RoomWorldObject(PuddleWorld):
 
 class RoomWorldFinal(PuddleWorld):
     ''' Set of 6 rooms. Need to pick up all fruits and reach gap to complete task
-    Hard task for large n! Without a non-markovian policy, will need to square view large 
-    (to keep fruits in view, thus the agent realising there's work to be done before leaving)  '''
-    def __init__(self, n = None, objects = None, mode = None):
-        # mode : 'fruit' - learn to pick up fruit, 'exit' - learn to exit room
+    Hardest task for large n! Useful as simple HRL testbed.'''
+    def __init__(self, n = None):
         if(n is None): # n >= 5
-            self.n = 14
+            self.n = 32
         else: self.n = n
         
-        if objects is None:
-            self.objects = {'fruits':1,'mines':0} # make sure this is small enough to fit inside world
-        else: self.objects = objects
+        m = self.load_map()
 
-        if(mode is None): 
-            self.mode = 'fruit'
-        else: self.mode = mode
-        
-        m,(i,j) = self.load_random_map()
+        start_states = [[30,14],[30,15],[30,16]]
 
-        if self.mode == 'fruit':
-            start_states = [[i,j]] # Start from the gap and find the fruit
-        else: start_states = [] # Start from a random free location and find the gap (invisible goal)
-        # print(start_states)
-        super(RoomWorldObject, self).__init__(init_map = m, start_states = start_states)
+        super(RoomWorldFinal, self).__init__(init_map = m, start_states = start_states)
     
-    def load_random_map(self):
-        # Returns random map with two rooms and the gap between them
+    def load_map(self):
+        # Returns harcoded map. TODO: Make this smaller?
         m = np.zeros((self.n,self.n))
 
+        m[:,10] = m[:,21] = WORLD_OBSTACLE
+        m[10,:11] = m[10,21:] = WORLD_OBSTACLE
+        m[5,10:21] = WORLD_OBSTACLE
+        m[16,10] = m[16,21] = m[8,10] = m[8,21] = m[5,15] = WORLD_FREE
+
+        m[2,2] = m[24,2] = m[1,15] = m[2,27] = m[25,27] = WORLD_FRUIT
+
         m[0,:] =  m[-1,:] =  m[:,0] = m[:,-1] = WORLD_OBSTACLE # Make Walls
-        i,j =  np.random.randint(1,self.n-1),np.random.randint(self.n-4,self.n-2) # pick random row and col to make exit between rooms
-        m[:,j] = WORLD_OBSTACLE # Makes intersecting wall
-        m[i,j] = WORLD_FREE # Makes gap between rooms
+s
+        self.num_fruits_left = 5
 
-        free_locs = np.where(m == WORLD_FREE)
-        free_coords = np.c_[free_locs]
-        free_states = free_coords#[self.coord2ind(c) for c in free_coords] # picks all free states
-
-        if self.mode == 'fruit':
-            num_fruits = self.objects['fruits']
-            num_mines = self.objects['mines']
-            random_states = np.random.choice(len(free_states),num_fruits+num_mines,replace=False) # throws error if too many mines+fruits 
-            
-            candidate_states = [free_states[s] for s in random_states]
-            
-            f_ind = candidate_states[:num_fruits]
-            m_ind = candidate_states[num_fruits:]
-
-            for k,l in f_ind: m[k,l] = WORLD_FRUIT 
-            for k,l in m_ind: m[k,l] = WORLD_MINE
-
-            self.num_fruits_left = num_fruits # To track number of fruits
-        else: # Assumes learn2exit mode otherwise
-            m[i,j] = WORLD_INVISIBLE_GOAL # Makes invisible goal in gap between rooms. Invisible so that agent learns to see the gap structure
-
-        if np.random.randint(2): # like flipping a coin (bernoulli(0.5))
-            m = m.T # transpose the Map to learn vertical representations as well.
-            temp = i # swap i,j to keep gap location correct
-            i = j
-            j = temp
-
-        # set gap coordinates
-        self.gap_i = i
-        self.gap_j = j
-
-        return m,[i,j]
+        return m
 
     def _step(self, action):
-        return_val = super(RoomWorldObject, self)._step(action)
+        return_val = super(RoomWorldFinal, self)._step(action)
         self.num_fruits_left -= self.found_fruit_in_last_turn # Reduce fruit counter if fruit was found
-        if self.num_fruits_left <= 0: # set goal state if no fruits in map
-            self.map[self.gap_i, self.gap_j] = WORLD_INVISIBLE_GOAL
+        if self.num_fruits_left <= 1: # set goal state if one fruit left in map
+            self.map[self.map == WORLD_FRUIT] = WORLD_GOAL
             self.set_term_state() # Refresh terminal state list after adding goal
         return return_val
-
-    def reload_random(self):
-        m,[i,j] = self.load_random_map()
-        self.map = m
-        if self.mode == 'fruit':
-            start_states = [[i,j]]
-        else:
-            start_states = []
-        self.set_start_state(start_states,self.start_state_ind)
-        self.set_term_state()
-    
-    def _reset(self):
-        # Randomising map at each run
-        self.reload_random();
-        return super(RoomWorldObject, self)._reset()

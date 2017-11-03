@@ -99,3 +99,9 @@ register(
     max_episode_steps=100000,
     kwargs = {'n':28}
 )
+
+register(
+    id='RoomWorldFinalBig-v0',
+    entry_point='gridworlds.envs:RoomWorldFinal',
+    max_episode_steps=100000
+)
