@@ -32,7 +32,7 @@ cd tests/
 test_env.py
 ```
 
-Recommended to run in ipython terminal.
+Recommended to run tests in an python terminal.
 
 ## Map Descriptions
 - PuddleWorld - 

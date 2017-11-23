@@ -199,6 +199,9 @@ class PuddleWorld(gym.Env):
         view_patch = self.map[up:down+1, left:right+1]
 
         view = np.zeros((2*n+1,2*n+1))
+        if self.done: # Skip if done
+            return view
+            
         view_up = max(0, n-row)
         view_down = min(self.n -1 - row + n,2*n)
         view_left = max(0, n-col)
@@ -471,9 +474,10 @@ class RoomWorld(PuddleWorld):
         self.set_term_state()
 
     def _step(self, action):
-        return_val = super(RoomWorld, self)._step(action)
-        [row, col] = self.ind2coord(return_val[0])
-        self.goal_count_dict[self.room_map[row,col]] -= self.found_fruit_in_last_turn # Reduce room index fruit counter if fruit was found
+        return_val = super(RoomWorld, self)._step(action) # state, reward, done, _
+        if not return_val[2]:
+            [row, col] = self.ind2coord(return_val[0]) 
+            self.goal_count_dict[self.room_map[row,col]] -= self.found_fruit_in_last_turn # Reduce room index fruit counter if fruit was found
         return return_val
     
     def _reset(self):
@@ -488,8 +492,8 @@ class RoomWorldObject(RoomWorld):
     (to keep fruits in view, thus the agent realising there's work to be done before leaving) '''
 
     def _step(self, action): # To set goal once all fruits are taken
-        return_val = super(RoomWorldObject, self)._step(action) # takes care of room index fruit counter
-        [row, col] = self.ind2coord(return_val[0])
+        # First take care of room index fruit counter
+        return_val = super(RoomWorldObject, self)._step(action) # state, reward, done, _
         self.num_fruits_left -= self.found_fruit_in_last_turn # Reduce total fruit counter if fruit was found
         if self.num_fruits_left <= 0: # set goal state to gap if no fruits in map
             self.map[self.gap_i, self.gap_j] = WORLD_INVISIBLE_GOAL
@@ -569,9 +573,10 @@ class RoomWorldFinal(PuddleWorld):
         return m
 
     def _step(self, action):
-        return_val = super(RoomWorldFinal, self)._step(action)
-        [row, col] = self.ind2coord(return_val[0])
-        self.goal_count_dict[self.room_map[row,col]] -= self.found_fruit_in_last_turn # Reduce room index fruit counter if fruit was found
+        return_val = super(RoomWorldFinal, self)._step(action) # state, reward, done, _
+        if not return_val[2]:
+            [row, col] = self.ind2coord(return_val[0])
+            self.goal_count_dict[self.room_map[row,col]] -= self.found_fruit_in_last_turn # Reduce room index fruit counter if fruit was found
         self.num_fruits_left -= self.found_fruit_in_last_turn # Reduce fruit counter if fruit was found
         if self.num_fruits_left <= 1: # set goal state if one fruit left in map
             self.map[self.map == WORLD_FRUIT] = WORLD_GOAL
