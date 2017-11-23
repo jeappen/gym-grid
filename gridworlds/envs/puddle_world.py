@@ -62,11 +62,28 @@ class PuddleWorld(gym.Env):
         else:
             self.map = init_map
             self.n = self.map.shape[0] # assuming Square shape
+
+
         
 
         self.tile_ids = {WORLD_FREE:step_reward,WORLD_OBSTACLE:bump_reward,WORLD_GOAL:terminal_reward,\
          WORLD_FRUIT: fruit_reward, WORLD_MINE : mine_reward, WORLD_INVISIBLE_GOAL: terminal_reward}
         self.tile_ids.update(puddle_dict)
+
+        # Handling fruit count when required. Needed for Nose in multiple room maps
+        try:
+            self.num_rooms # Does num_rooms exist?
+        except NameError:
+            self.num_rooms = None
+        try:
+            self.room_map # Does room_map exist?
+        except NameError:
+            self.room_map = None
+        try:
+            self.goal_count_dict # Does goal_count_dict exist?
+        except NameError:
+            self.goal_count_dict = None
+        
 
         # self.n = n # Uncomment when not loading map
         self.noise = noise
@@ -200,9 +217,19 @@ class PuddleWorld(gym.Env):
         view_channels = np.array([bad_c,neutral_c,good_c]) # or this without loss of generality
 
         if(split_view):
-            return view_channels
+            return_view = view_channels
         else:
-            return view
+            return_view = view
+
+        if(self.num_rooms is not None): # If num_rooms is >1 then replace centre with fruit count in each view
+            num_fruits = self.goal_count_dict[self.room_map[row,col]]
+            if(split_view):
+                return_view[:,n,n] = num_fruits
+            else:
+                return_view[n,n] = num_fruits
+
+        return return_view
+
 
     def _get_reward(self, new_state=None):
         if self.done:
@@ -311,7 +338,7 @@ class PuddleWorld_a2t(PuddleWorld):
         super(PuddleWorld_a2t, self).__init__(world_file_path="PW_a2t.dat")
 
 class PuddleWorld_random(PuddleWorld):
-# puddle world w/random fruits. No terminal state (shoul stop after a few steps)
+# puddle world w/random fruits. No terminal state (should stop after a few steps)
     def __init__(self, n = None, objects = None):
         # objects: to fix number and ratio of fruits to mines in the room (sum of terms <= n**2 . Limited by size of room)
         if(n is None):
@@ -357,12 +384,13 @@ class RoomWorld(PuddleWorld):
         else: self.n = n
         
         if objects is None:
-            self.objects = {'fruits':1,'mines':0} # make sure this is small enough to fit inside world
+            self.objects = {'fruits':2,'mines':0} # make sure this is small enough to fit inside world
         else: self.objects = objects
 
         if(mode is None): # n >= 5
             self.mode = 'fruit'
         else: self.mode = mode
+        self.num_rooms = 2 # to make room indices
         
         m,(i,j) = self.load_random_map()
 
@@ -387,83 +415,7 @@ class RoomWorld(PuddleWorld):
 
         if self.mode == 'fruit':
             num_fruits = self.objects['fruits']
-            num_mines = self.objects['mines']
-            random_states = np.random.choice(len(free_states),num_fruits+num_mines,replace=False) # throws error if too many mines+fruits 
-            
-            candidate_states = [free_states[s] for s in random_states]
-            
-            f_ind = candidate_states[:num_fruits]
-            m_ind = candidate_states[num_fruits:]
-
-            for k,l in f_ind: m[k,l] = WORLD_GOAL # To enable termination after finding the fruit. Hinges on _get_view aliasing fruits and goals as 'good'
-            for k,l in m_ind: m[k,l] = WORLD_MINE
-        else: # Assumes learn2exit mode otherwise
-            m[i,j] = WORLD_INVISIBLE_GOAL # Makes invisible goal in gap between rooms. Invisible so that agent learns to see the gap structure
-
-        if np.random.randint(2): # like flipping a coin (bernoulli(0.5))
-            m = m.T # transpose the Map to learn vertical representations as well.
-            temp = i # swap i,j to keep gap location correct
-            i = j
-            j = temp
-
-        return m,[i,j]
-
-    def reload_random(self):
-        m,[i,j] = self.load_random_map()
-        self.map = m
-        if self.mode == 'fruit':
-            start_states = [[i,j]]
-        else:
-            start_states = []
-        self.set_start_state(start_states,self.start_state_ind)
-        self.set_term_state()
-    
-    def _reset(self):
-        #Randomising map at each run
-        self.reload_random(); 
-        return super(RoomWorld, self)._reset()
-
-class RoomWorldObject(PuddleWorld):
-    ''' Bounded 2 Rooms w/exit. Need to pick up all fruits and reach gap to complete task
-    Hard task for large n! Without a non-markovian policy, will need to square view large 
-    (to keep fruits in view, thus the agent realising there's work to be done before leaving) '''
-    def __init__(self, n = None, objects = None, mode = None):
-        # mode : 'fruit' - learn to pick up fruit, 'exit' - learn to exit room
-        if(n is None): # n >= 5
-            self.n = 14
-        else: self.n = n
-        
-        if objects is None:
-            self.objects = {'fruits':1,'mines':0} # make sure this is small enough to fit inside world
-        else: self.objects = objects
-
-        if(mode is None): 
-            self.mode = 'fruit'
-        else: self.mode = mode
-        
-        m,(i,j) = self.load_random_map()
-
-        if self.mode == 'fruit':
-            start_states = [[i,j]] # Start from the gap and find the fruit
-        else: start_states = [] # Start from a random free location and find the gap (invisible goal)
-        # print(start_states)
-        super(RoomWorldObject, self).__init__(init_map = m, start_states = start_states)
-    
-    def load_random_map(self):
-        # Returns random map with two rooms and the gap between them
-        m = np.zeros((self.n,self.n))
-
-        m[0,:] =  m[-1,:] =  m[:,0] = m[:,-1] = WORLD_OBSTACLE # Make Walls
-        i,j =  np.random.randint(1,self.n-1),np.random.randint(self.n-5,self.n-3) # pick random row and col to make exit between rooms
-        m[:,j] = WORLD_OBSTACLE # Makes intersecting wall
-        m[i,j] = WORLD_FREE # Makes gap between rooms
-
-        free_locs = np.where(m == WORLD_FREE)
-        free_coords = np.c_[free_locs]
-        free_states = free_coords#[self.coord2ind(c) for c in free_coords] # picks all free states
-
-        if self.mode == 'fruit':
-            num_fruits = self.objects['fruits']
+            self.num_fruits_left = num_fruits # initialize this
             num_mines = self.objects['mines']
             random_states = np.random.choice(len(free_states),num_fruits+num_mines,replace=False) # throws error if too many mines+fruits 
             
@@ -474,32 +426,77 @@ class RoomWorldObject(PuddleWorld):
 
             for k,l in f_ind: m[k,l] = WORLD_FRUIT 
             for k,l in m_ind: m[k,l] = WORLD_MINE
-
-            self.num_fruits_left = num_fruits # To track number of fruits
         else: # Assumes learn2exit mode otherwise
             m[i,j] = WORLD_INVISIBLE_GOAL # Makes invisible goal in gap between rooms. Invisible so that agent learns to see the gap structure
+
+        # Nose for fruit, can know number of fruits in the room
+
+        ## first make index of room map
+        room_map = np.ones(m.shape)*-1
+        room_map[m!=WORLD_OBSTACLE] = 0
+        dummy_map = np.hstack([np.ones((m.shape[0],j)),2*np.ones((m.shape[0],self.n-j))])
+        room_map[room_map==0] = dummy_map[room_map==0] 
+
+        ## Now make a count for each room index
+        goal_count = room_map[m==WORLD_FRUIT] # eg [1,2,2,3] means 1 goal in room 1, 2 in room 2 and 1 in room 3
+        self.goal_count_dict = {i+1:0 for i in range(self.num_rooms)}
+        for r in goal_count:
+            self.goal_count_dict[r] += 1  
 
         if np.random.randint(2): # like flipping a coin (bernoulli(0.5))
             m = m.T # transpose the Map to learn vertical representations as well.
             temp = i # swap i,j to keep gap location correct
             i = j
             j = temp
+            room_map = room_map.T
 
-        # set gap coordinates
         self.gap_i = i
         self.gap_j = j
 
+        self.room_map = room_map
+
         return m,[i,j]
 
+    def reload_random(self):
+        m,[i,j] = self.load_random_map()
+        self.map = m
+        if self.mode == 'fruit':
+            start_states = [[i,j]]
+            # Now to enable termination after finding the fruit change to WORLD_GOAL. 
+            # This hinges on _get_view() aliasing fruits and goals as 'good'
+            self.map[self.map==WORLD_FRUIT] = WORLD_GOAL 
+        else:
+            start_states = []
+        self.set_start_state(start_states,self.start_state_ind)
+        self.set_term_state()
+
     def _step(self, action):
-        return_val = super(RoomWorldObject, self)._step(action)
-        self.num_fruits_left -= self.found_fruit_in_last_turn # Reduce fruit counter if fruit was found
-        if self.num_fruits_left <= 0: # set goal state if no fruits in map
+        return_val = super(RoomWorld, self)._step(action)
+        [row, col] = self.ind2coord(return_val[0])
+        self.goal_count_dict[self.room_map[row,col]] -= self.found_fruit_in_last_turn # Reduce room index fruit counter if fruit was found
+        return return_val
+    
+    def _reset(self):
+        #Randomising map at each run
+        self.reload_random(); 
+        return super(RoomWorld, self)._reset()
+
+class RoomWorldObject(RoomWorld):
+    ''' Bounded 2 Rooms w/exit. Need to pick up all fruits and reach gap to complete task
+    Now solvable since room fruit count is part of observation 
+    Hard task for large n! Without a non-markovian policy, will need to square view large 
+    (to keep fruits in view, thus the agent realising there's work to be done before leaving) '''
+
+    def _step(self, action): # To set goal once all fruits are taken
+        return_val = super(RoomWorldObject, self)._step(action) # takes care of room index fruit counter
+        [row, col] = self.ind2coord(return_val[0])
+        self.num_fruits_left -= self.found_fruit_in_last_turn # Reduce total fruit counter if fruit was found
+        if self.num_fruits_left <= 0: # set goal state to gap if no fruits in map
             self.map[self.gap_i, self.gap_j] = WORLD_INVISIBLE_GOAL
             self.set_term_state() # Refresh terminal state list after adding goal
         return return_val
 
-    def reload_random(self):
+    def reload_random(self): # redefine to stop fruit from being goal
         m,[i,j] = self.load_random_map()
         self.map = m
         if self.mode == 'fruit':
@@ -508,11 +505,6 @@ class RoomWorldObject(PuddleWorld):
             start_states = []
         self.set_start_state(start_states,self.start_state_ind)
         self.set_term_state()
-    
-    def _reset(self):
-        # Randomising map at each run
-        self.reload_random();
-        return super(RoomWorldObject, self)._reset()
 
 
 class RoomWorldFinal(PuddleWorld):
@@ -533,21 +525,53 @@ class RoomWorldFinal(PuddleWorld):
         # Returns harcoded map. TODO: Make this smaller?
         m = np.zeros((self.n,self.n))
 
+        fruit_indexes = [[2,2],[24,2],[1,15],[2,27],[23,27]]
+        gap_indexes = [[16,10],[16,21],[8,10],[8,21],[5,15]]
+
+        # Make walls
         m[:,10] = m[:,21] = WORLD_OBSTACLE
         m[10,:11] = m[10,21:] = WORLD_OBSTACLE
         m[5,10:21] = WORLD_OBSTACLE
-        m[16,10] = m[16,21] = m[8,10] = m[8,21] = m[5,15] = WORLD_FREE
+        m[0,:] =  m[-1,:] =  m[:,0] = m[:,-1] = WORLD_OBSTACLE # Make Surrounding walls
 
-        m[2,2] = m[24,2] = m[1,15] = m[2,27] = m[25,27] = WORLD_FRUIT
+        # Make gaps
+        for i,j in gap_indexes:
+            m[i,j] = WORLD_FREE
 
-        m[0,:] =  m[-1,:] =  m[:,0] = m[:,-1] = WORLD_OBSTACLE # Make Walls
+        # Set fruits
+        for i,j in fruit_indexes:
+            m[i,j] = WORLD_FRUIT
         
-        self.num_fruits_left = 5
+        self.num_fruits_left = len(fruit_indexes)
+        self.num_rooms = 6
+
+        # Nose for fruit, can know number of fruits in the room
+
+        ## first make index of room map
+        room_map = np.ones(m.shape)*-1
+        room_map[m!=WORLD_OBSTACLE] = 0
+        room_map[:10,:11] = 1
+        room_map[10:,:11] = 2
+        room_map[:6,11:21] = 3
+        room_map[6:,11:21] = 4
+        room_map[:10,21:] = 5
+        room_map[10:,21:] = 6
+        room_map[m==WORLD_OBSTACLE] = -1
+
+        self.room_map = room_map
+
+        ## Now make a count for each room index
+        goal_count = room_map[m==WORLD_FRUIT] # eg [1,2,2,3] means 1 goal in room 1, 2 in room 2 and 1 in room 3
+        self.goal_count_dict = {i+1:0 for i in range(self.num_rooms)}
+        for r in goal_count:
+            self.goal_count_dict[r] += 1 
 
         return m
 
     def _step(self, action):
         return_val = super(RoomWorldFinal, self)._step(action)
+        [row, col] = self.ind2coord(return_val[0])
+        self.goal_count_dict[self.room_map[row,col]] -= self.found_fruit_in_last_turn # Reduce room index fruit counter if fruit was found
         self.num_fruits_left -= self.found_fruit_in_last_turn # Reduce fruit counter if fruit was found
         if self.num_fruits_left <= 1: # set goal state if one fruit left in map
             self.map[self.map == WORLD_FRUIT] = WORLD_GOAL

@@ -46,7 +46,12 @@ class SquareView_grid(gym.ObservationWrapper):
     def _convert(self, obs):
         view = self.env.unwrapped._get_view(obs,self.n,self.split_view)
         if(self.split_view):
+            fruit_count = None
+            if(self.env.unwrapped.goal_count_dict is not None): fruit_count = view[0,self.n,self.n]
+
             view = np.array([-1*view[0] + 1*view[1] + 3*view[2]]) #flatten out the view
+
+            if fruit_count is not None: view[0,self.n,self.n] = fruit_count # replace centre with fruit count after flattening
         return view
 
 
