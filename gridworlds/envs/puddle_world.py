@@ -29,7 +29,14 @@ WORLD_INVISIBLE_GOAL = 8 # Terminal state not visible to agent when using get_vi
 
 WORLD_PUDDLE = [4, 5, 6]  # Puddle Codes
 puddle_rewards = [-1,-2,-3] # Puddle penalties -1, -2, and -3
-puddle_dict = {i:j for i,j in zip(WORLD_PUDDLE,puddle_rewards)}
+puddle_dict = {i:j for i,j in zip(WORLD_PUDDLE,puddle_rewards)} # To map rewards associated with Puddles
+
+# define colors
+# 0: black; 1 : gray; 2 : blue; 3 : green; 4 : red
+COLORS = {0:[0.0,0.0,0.0], 1:[0.5,0.5,0.5], \
+          2:[0.0,0.0,1.0], 3:[0.0,1.0,0.0], \
+          4:[1.0,0.0,0.0], 6:[1.0,0.0,1.0], \
+          7:[1.0,1.0,0.0],8: [1.0,1.0,1.0]}
 
 class PuddleWorld(gym.Env):
     metadata = {'render.modes': ['human']}
@@ -63,25 +70,27 @@ class PuddleWorld(gym.Env):
             self.map = init_map
             self.n = self.map.shape[0] # assuming Square shape
 
-
-        
-
+        # To map tiles and rewards associated
         self.tile_ids = {WORLD_FREE:step_reward,WORLD_OBSTACLE:bump_reward,WORLD_GOAL:terminal_reward,\
          WORLD_FRUIT: fruit_reward, WORLD_MINE : mine_reward, WORLD_INVISIBLE_GOAL: terminal_reward}
         self.tile_ids.update(puddle_dict)
 
+        # To map colours to tile IDs
+        self.tile_colour_ids = {WORLD_FREE:0,WORLD_OBSTACLE:1,WORLD_GOAL:3,\
+         WORLD_FRUIT: 2, WORLD_MINE : 4, WORLD_INVISIBLE_GOAL: 0}
+
         # Handling fruit count when required. Needed for Nose in multiple room maps
         try:
             self.num_rooms # Does num_rooms exist?
-        except NameError:
+        except (AttributeError,NameError):
             self.num_rooms = None
         try:
             self.room_map # Does room_map exist?
-        except NameError:
+        except (AttributeError,NameError):
             self.room_map = None
         try:
             self.goal_count_dict # Does goal_count_dict exist?
-        except NameError:
+        except (AttributeError,NameError):
             self.goal_count_dict = None
         
 
@@ -135,11 +144,12 @@ class PuddleWorld(gym.Env):
 
     def _step(self, action):
         assert self.action_space.contains(action)
+        info = {}
 
         if self.state == self.terminal_state:
-            self.state = self.absorbing_state #Careful now, don't run env. without resetting
+            self.state = self.absorbing_state # Careful now, don't run env. without resetting
             self.done = True
-            return self.state, self._get_reward(), self.done, None
+            return self.state, self._get_reward(), self.done, info
 
         [row, col] = self.ind2coord(self.state)
 
@@ -174,9 +184,9 @@ class PuddleWorld(gym.Env):
         # Set self.done at end of step
         if self.state == self.terminal_state or self.state in self.term_states:
             self.done = True
-            return self.state, self._get_reward(), self.done, None
+            return self.state, self._get_reward(), self.done, info
 
-        return self.state, reward, self.done, None
+        return self.state, reward, self.done, info
 
     def _get_view(self, state=None, n=None, split_view = None):
         # get view of n steps around
@@ -199,9 +209,7 @@ class PuddleWorld(gym.Env):
         view_patch = self.map[up:down+1, left:right+1]
 
         view = np.zeros((2*n+1,2*n+1))
-        if self.done: # Skip if done
-            return view
-            
+
         view_up = max(0, n-row)
         view_down = min(self.n -1 - row + n,2*n)
         view_left = max(0, n-col)
@@ -209,17 +217,19 @@ class PuddleWorld(gym.Env):
 
         view[view_up:view_down+1, view_left:view_right+1] = view_patch # handles cases where n size gives window off the map
 
-        # modify view here (different channels, color-code, etc)
-        # Can divide into three channels. 1* to make it 0-1
-        bad_l = WORLD_PUDDLE+[WORLD_MINE]
-        good_l = [WORLD_GOAL,WORLD_FRUIT]
-        bad_c = 1*np.any([(view == x) for x in bad_l],axis=0)
-        good_c = 1*np.any([(view == x) for x in good_l],axis=0)
-        neutral_c = 1*(view == WORLD_OBSTACLE)
-        new_view = -1*bad_c + 1*neutral_c + 2*good_c # can return this
-        view_channels = np.array([bad_c,neutral_c,good_c]) # or this without loss of generality
+        if self.done: # Skip if done
+            return view
 
         if(split_view):
+            # modify view here (different channels, color-code, etc)
+            # Can divide into three channels. 1* to make it 0-1
+            bad_l = WORLD_PUDDLE+[WORLD_MINE]
+            good_l = [WORLD_GOAL,WORLD_FRUIT]
+            bad_c = 1*np.any([(view == x) for x in bad_l],axis=0)
+            good_c = 1*np.any([(view == x) for x in good_l],axis=0)
+            neutral_c = 1*(view == WORLD_OBSTACLE)
+            new_view = -1*bad_c + 1*neutral_c + 2*good_c # can return this
+            view_channels = np.array([bad_c,neutral_c,good_c]) # or this without loss of generality
             return_view = view_channels
         else:
             return_view = view
@@ -233,6 +243,15 @@ class PuddleWorld(gym.Env):
 
         return return_view
 
+    def _get_colour_view(self, state=None, n=None):
+        ''' Gets colour codes for environment objects.
+            Lets you define colour in the environment wrapper.
+        '''
+        view = self._get_view(state,n,False) # get raw view without splitting into good, bad channels
+        if(self.num_rooms is not None): # This means centre of view is num of fruits
+            view[n,n] = min(view[n,n],3) # Let 3 be cutoff (Since there's no colour for 4!)
+        colour_view = np.reshape([self.tile_colour_ids[j] for i in view for j in i],view.shape)
+        return colour_view
 
     def _get_reward(self, new_state=None):
         if self.done:
@@ -387,7 +406,7 @@ class RoomWorld(PuddleWorld):
         else: self.n = n
         
         if objects is None:
-            self.objects = {'fruits':2,'mines':0} # make sure this is small enough to fit inside world
+            self.objects = {'fruits':1,'mines':0} # make sure this is small enough to fit inside world
         else: self.objects = objects
 
         if(mode is None): # n >= 5
@@ -443,8 +462,9 @@ class RoomWorld(PuddleWorld):
         ## Now make a count for each room index
         goal_count = room_map[m==WORLD_FRUIT] # eg [1,2,2,3] means 1 goal in room 1, 2 in room 2 and 1 in room 3
         self.goal_count_dict = {i+1:0 for i in range(self.num_rooms)}
+        self.goal_count_dict[-1] = 0 # To catch exception where obstacle is centered in view
         for r in goal_count:
-            self.goal_count_dict[r] += 1  
+            self.goal_count_dict[r] += 1   
 
         if np.random.randint(2): # like flipping a coin (bernoulli(0.5))
             m = m.T # transpose the Map to learn vertical representations as well.
@@ -567,6 +587,7 @@ class RoomWorldFinal(PuddleWorld):
         ## Now make a count for each room index
         goal_count = room_map[m==WORLD_FRUIT] # eg [1,2,2,3] means 1 goal in room 1, 2 in room 2 and 1 in room 3
         self.goal_count_dict = {i+1:0 for i in range(self.num_rooms)}
+        self.goal_count_dict[-1] = 0 # To catch exception where obstacle is centered in view
         for r in goal_count:
             self.goal_count_dict[r] += 1 
 
