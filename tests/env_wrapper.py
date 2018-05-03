@@ -1,5 +1,5 @@
 """
-Author: Deepak Pathak
+Author: Joe
 
 Acknowledgement:
     - The wrappers (BufferedObsEnv, SkipEnv) were originally written by
@@ -7,6 +7,7 @@ Acknowledgement:
     - This file is derived from
         https://github.com/shelhamer/ourl/envs.py
         https://github.com/openai/baselines/blob/master/baselines/common/atari_wrappers_deprecated.py
+        Deepak Pathak's work
 """
 from __future__ import print_function
 import numpy as np
@@ -16,21 +17,41 @@ from gym.spaces.box import Box
 import gym
 import time, sys
 
+# Gridworld Tile IDs. Matches with gym PuddleWorld
+WORLD_FREE = 0
+WORLD_OBSTACLE = 1
+WORLD_MINE = 2
+WORLD_GOAL = 3
+WORLD_FRUIT = 7
+
+
 class SquareView_grid(gym.ObservationWrapper):
     """
     Convert observation (row,col) in gridworld to Square View around it
     """
-    def __init__(self, env=None, n = None, split_view = None):
+    def __init__(self, env=None, n = None, split_view = None, flatten_mode = None):
+        '''
+        n = view size around agent
+        split_view = Whether tile ID as is or 3 channels, (bad,neutral,good) - one-hot each cell
+        flatten_mode = (if split_view)- ways to combine 3 separate channels of gridworld observation. 4 modes for now.
+                     0: (-3,1,3), 1: (-3,-1,3), 2: 2 channels (-1*b + 1*g, 1*n) , 3: all channels, as-is
+        '''
         super(SquareView_grid, self).__init__(env)
         if(n is None):
             n = 1
         if(split_view is None):
             split_view = False
+        if(flatten_mode is None):
+            flatten_mode = 0
         self.n = n
         self.split_view = split_view
-        view_size = (1+2*n,1+2*n)
+        self.flatten_mode = flatten_mode
+        if split_view and flatten_mode>1: # if flatten_mode > 1 => 2 or 3 channels
+            view_size = (flatten_mode,1+2*n,1+2*n)
+        else:
+            view_size = (1+2*n,1+2*n)
         view_codes = 10 # number of types of tiles in view
-        self.observation_space = Box(low=np.zeros(view_size), high=np.zeros(view_size)+view_codes)
+        self.observation_space = Box(low=np.zeros(view_size)-view_codes, high=np.zeros(view_size)+view_codes)
 
     def _step(self, action):
         obs, reward, done, info = self.env.step(action)
@@ -39,21 +60,68 @@ class SquareView_grid(gym.ObservationWrapper):
     def _observation(self, obs):
         obs = self._convert(obs)
         return obs
+        
     def _reset(self):
         obs = self._convert(self.env.reset())
         return obs
 
     def _convert(self, obs):
         view = self.env.unwrapped._get_view(obs,self.n,self.split_view)
+        fruit_count = None
+        if(self.env.unwrapped.goal_count_dict is not None) and view.ndim ==3: fruit_count = view[0,self.n,self.n]
+
         if(self.split_view):
-            fruit_count = None
-            if(self.env.unwrapped.goal_count_dict is not None): fruit_count = view[0,self.n,self.n]
-
-            view = np.array([-1*view[0] + 1*view[1] + 3*view[2]]) #flatten out the view
-
-            if fruit_count is not None: view[0,self.n,self.n] = fruit_count # replace centre with fruit count after flattening
+            if(self.flatten_mode == 0):
+                view = -3*view[0] + 1*view[1] + 3*view[2] #flatten out the view
+            if(self.flatten_mode == 1):
+                view = -3*view[0] - 1*view[1] + 3*view[2] #flatten out the view
+            if(self.flatten_mode == 2):
+                view = np.array([-1*view[0] + 1*view[2],view[1]]) # 2 channel view
+            if(self.flatten_mode == 3):
+                pass #return 3 channels as-is
+        if fruit_count is not None: 
+            if view.ndim ==3: view[:,self.n,self.n] = fruit_count # replace centre of view with fruit count after modifying view
+            else: view[self.n,self.n] = fruit_count # replace centre of view with fruit count after modifying view
         return view
 
+# define colors
+# 0: black; 1 : gray; 2 : blue; 3 : green; 4 : red
+COLORS = {0:[0.0,0.0,0.0], 1:[0.5,0.5,0.5], \
+          2:[0.0,0.0,1.0], 3:[0.0,1.0,0.0], \
+          4:[1.0,0.0,0.0], 6:[1.0,0.0,1.0], \
+          7:[1.0,1.0,0.0], 8: [1.0,1.0,1.0]}
+
+class ColourView_grid(gym.ObservationWrapper):
+    """
+    Convert observation (row,col) in gridworld to Coloured Square View around it
+    """
+    def __init__(self, env=None, n = None):
+        '''
+        n = view size around agent
+        '''
+        super(ColourView_grid, self).__init__(env)
+        if(n is None):
+            n = 1
+        self.n = n
+        view_size = (1+2*n,1+2*n,3)
+        self.observation_space = Box(low=0, high=1, shape=view_size)
+
+    def _step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        return self._observation(obs), reward, done, info
+
+    def _observation(self, obs):
+        obs = self._convert(obs)
+        return obs
+        
+    def _reset(self):
+        obs = self._convert(self.env.reset())
+        return obs
+
+    def _convert(self, obs):
+        view = self.env.unwrapped._get_colour_view(obs,self.n) # Flat image of colour codes (decided by environment)
+        colour_view = np.reshape([COLORS[j] for i in view for j in i],view.shape+(3,))
+        return colour_view
 
 class discObs2Box_grid(gym.ObservationWrapper):
     """
@@ -72,6 +140,7 @@ class discObs2Box_grid(gym.ObservationWrapper):
     def _observation(self, obs):
         obs = self._convert(obs)
         return obs
+
     def _reset(self):
         obs = self._convert(self.env.reset())
         return obs
@@ -81,10 +150,20 @@ class discObs2Box_grid(gym.ObservationWrapper):
 
 
 class ChangePerStepReward_grid(gym.RewardWrapper):
-    """Change per step reward for gridworld given that free tiles have id = 0"""
+    """Change per step reward for gridworld given that free tiles have id = WORLD_FREE"""
     def __init__(self, env=None, per_step=-0.1):
         super(ChangePerStepReward_grid, self).__init__(env)
-        self.env.unwrapped.tile_ids[0] = per_step
+        self.env.unwrapped.tile_ids[WORLD_FREE] = per_step
+
+    def _reward(self, reward): # To make reward wrapper work
+        return reward
+
+class MinesweeperMode(gym.RewardWrapper):
+    """Changes Mine and Fruit Rewards. Uses harcoded values hence boo"""
+    def __init__(self, env=None, mine_reward = 2 , fruit_reward = -4):
+        super(MinesweeperMode, self).__init__(env)
+        self.env.unwrapped.tile_ids[WORLD_MINE] = mine_reward
+        self.env.unwrapped.tile_ids[WORLD_FRUIT] = fruit_reward
 
     def _reward(self, reward): # To make reward wrapper work
         return reward
