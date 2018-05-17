@@ -25,7 +25,7 @@ WORLD_GOAL = 3
 WORLD_FRUIT = 7
 
 
-class SquareView_grid(gym.ObservationWrapper):
+class SquareView_grid(gym.ObservationWrapper): 
     """
     Convert observation (row,col) in gridworld to Square View around it
     """
@@ -47,9 +47,10 @@ class SquareView_grid(gym.ObservationWrapper):
         self.split_view = split_view
         self.flatten_mode = flatten_mode
         if split_view and flatten_mode>1: # if flatten_mode > 1 => 2 or 3 channels
-            view_size = (flatten_mode,1+2*n,1+2*n)
+            view_size = (1+2*n,1+2*n,flatten_mode)
         else:
-            view_size = (1+2*n,1+2*n)
+            view_size = (1+2*n,1+2*n,1)
+        self._view_size = view_size
         view_codes = 10 # number of types of tiles in view
         self.observation_space = Box(low=np.zeros(view_size)-view_codes, high=np.zeros(view_size)+view_codes)
 
@@ -73,11 +74,13 @@ class SquareView_grid(gym.ObservationWrapper):
         if(self.split_view):
             if(self.flatten_mode == 0):
                 view = -3*view[0] + 1*view[1] + 3*view[2] #flatten out the view
-            if(self.flatten_mode == 1):
+                view = np.reshape(view,self._view_size)
+            elif(self.flatten_mode == 1):
                 view = -3*view[0] - 1*view[1] + 3*view[2] #flatten out the view
-            if(self.flatten_mode == 2):
+                view = np.reshape(view,self._view_size)
+            elif(self.flatten_mode == 2):
                 view = np.array([-1*view[0] + 1*view[2],view[1]]) # 2 channel view
-            if(self.flatten_mode == 3):
+            elif(self.flatten_mode == 3):
                 pass #return 3 channels as-is
         if fruit_count is not None: 
             if view.ndim ==3: view[:,self.n,self.n] = fruit_count # replace centre of view with fruit count after modifying view
@@ -117,6 +120,10 @@ class ColourView_grid(gym.ObservationWrapper):
     def _reset(self):
         obs = self._convert(self.env.reset())
         return obs
+        
+    def _render(self, mode='rgb_array', n=None, close=None):
+        data = self.env.render(mode=mode, n=self.n)
+        return data
 
     def _convert(self, obs):
         view = self.env.unwrapped._get_colour_view(obs,self.n) # Flat image of colour codes (decided by environment)
