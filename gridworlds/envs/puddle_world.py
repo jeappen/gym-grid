@@ -247,11 +247,19 @@ class PuddleWorld(gym.Env):
         ''' Gets colour codes for environment objects.
             Lets you define colour in the environment wrapper.
         '''
-        view = self._get_view(state,n,False) # get raw view without splitting into good, bad channels
-        if(self.num_rooms is not None): # This means centre of view is num of fruits
-            view[n,n] = min(view[n,n],3) # Let 3 be cutoff (Since there's no colour for 4!)
+        view = self._get_view(state,n,False)    # get raw view without splitting into good, bad channels
+        if(self.num_rooms is not None):     # This means centre of view is num of fruits
+            view[n,n] = min(view[n,n],3)    # Let 3 be cutoff (Since there's no colour for 4!)
         colour_view = np.reshape([self.tile_colour_ids[j] for i in view for j in i],view.shape)
-        return colour_view
+        return colour_view    
+        
+    def render(self, mode='rgb_array', n=None):
+        if n is None:
+            n = 2
+        if mode == 'rgb_array':
+            data = self._get_colour_view(self.state, n )
+            # Coded image
+            return data
 
     def _get_reward(self, new_state=None):
         if self.done:
