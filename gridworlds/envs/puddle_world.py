@@ -217,8 +217,8 @@ class PuddleWorld(gym.Env):
 
         view[view_up:view_down+1, view_left:view_right+1] = view_patch # handles cases where n size gives window off the map
 
-        if self.done: # Skip if done
-            return view
+        # if self.done: # Skip if done
+        #     return view
 
         if(split_view):
             # modify view here (different channels, color-code, etc)
@@ -234,7 +234,7 @@ class PuddleWorld(gym.Env):
         else:
             return_view = view
 
-        if(self.num_rooms is not None): # If num_rooms is >1 then replace centre with fruit count in each view
+        if(self.num_rooms is not None and not self.done): # If num_rooms is >1 then replace centre with fruit count in each view
             num_fruits = self.goal_count_dict[self.room_map[row,col]]
             if(split_view):
                 return_view[:,n,n] = num_fruits
@@ -253,13 +253,14 @@ class PuddleWorld(gym.Env):
         colour_view = np.reshape([self.tile_colour_ids[j] for i in view for j in i],view.shape)
         return colour_view    
         
-    def render(self, mode='rgb_array', n=None):
+    def render(self, mode='rgb_array', n=None, close=None):
         if n is None:
             n = 2
         if mode == 'rgb_array':
             data = self._get_colour_view(self.state, n )
             # Coded image
             return data
+        return None
 
     def _get_reward(self, new_state=None):
         if self.done:
