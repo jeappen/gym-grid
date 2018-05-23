@@ -56,6 +56,7 @@ class SquareView_grid(gym.ObservationWrapper):
 
     def _step(self, action):
         obs, reward, done, info = self.env.step(action)
+        # print('step',obs,)
         return self._observation(obs), reward, done, info
 
     def _observation(self, obs):
@@ -66,11 +67,18 @@ class SquareView_grid(gym.ObservationWrapper):
         obs = self._convert(self.env.reset())
         return obs
 
+    def _render(self, mode='rgb_array', n=None, close=None):
+        # TODO: finish this
+        if close: return
+        view = self.env.unwrapped._get_view(self._convert(self.env.unwrapped.state),self.n,self.split_view)
+        # print(view, sep=' ', end='', flush=True)
+        return
+
     def _convert(self, obs):
         view = self.env.unwrapped._get_view(obs,self.n,self.split_view)
         fruit_count = None
         if(self.env.unwrapped.goal_count_dict is not None) and view.ndim ==3: fruit_count = view[0,self.n,self.n]
-
+        # print(view, obs) # 
         if(self.split_view):
             if(self.flatten_mode == 0):
                 view = -3*view[0] + 1*view[1] + 3*view[2] #flatten out the view
@@ -83,7 +91,7 @@ class SquareView_grid(gym.ObservationWrapper):
             elif(self.flatten_mode == 3):
                 pass #return 3 channels as-is
         if fruit_count is not None: 
-            if view.ndim ==3: view[:,self.n,self.n] = fruit_count # replace centre of view with fruit count after modifying view
+            if view.ndim ==3: view[self.n,self.n,:] = fruit_count # replace centre of view with fruit count after modifying view
             else: view[self.n,self.n] = fruit_count # replace centre of view with fruit count after modifying view
         return view
 
@@ -122,6 +130,7 @@ class ColourView_grid(gym.ObservationWrapper):
         return obs
         
     def _render(self, mode='rgb_array', n=None, close=None):
+        if close: return
         data = self.env.render(mode=mode, n=self.n)
         return data
 

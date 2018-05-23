@@ -431,35 +431,23 @@ class RoomWorld(PuddleWorld):
         # print(start_states)
         super(RoomWorld, self).__init__(init_map = m, start_states = start_states)
     
-    def load_random_map(self):
-        # Returns random map with two rooms and the gap between them
-        m = np.zeros((self.n,self.n))
-
-        m[0,:] =  m[-1,:] =  m[:,0] = m[:,-1] = WORLD_OBSTACLE # Make Walls
-        i,j =  np.random.randint(1,self.n-1),np.random.randint(2,self.n-2) # pick random row and col to make exit between rooms
-        m[:,j] = WORLD_OBSTACLE # Makes intersecting wall
-        m[i,j] = WORLD_FREE # Makes gap between rooms
-
+    def assign_fruit_locations(self, m):
         free_locs = np.where(m == WORLD_FREE)
         free_coords = np.c_[free_locs]
         free_states = free_coords#[self.coord2ind(c) for c in free_coords] # picks all free states
+        num_fruits = self.objects['fruits']
+        self.num_fruits_left = num_fruits # initialize this
+        num_mines = self.objects['mines']
+        # throws error if too many mines+fruits
+        random_states = np.random.choice(len(free_states),num_fruits+num_mines,replace=False) 
+        candidate_states = [free_states[s] for s in random_states]       
+        f_ind = candidate_states[:num_fruits]
+        m_ind = candidate_states[num_fruits:]
+        for k,l in f_ind: m[k,l] = WORLD_FRUIT 
+        for k,l in m_ind: m[k,l] = WORLD_MINE
+        return m
 
-        if self.mode == 'fruit':
-            num_fruits = self.objects['fruits']
-            self.num_fruits_left = num_fruits # initialize this
-            num_mines = self.objects['mines']
-            random_states = np.random.choice(len(free_states),num_fruits+num_mines,replace=False) # throws error if too many mines+fruits 
-            
-            candidate_states = [free_states[s] for s in random_states]
-            
-            f_ind = candidate_states[:num_fruits]
-            m_ind = candidate_states[num_fruits:]
-
-            for k,l in f_ind: m[k,l] = WORLD_FRUIT 
-            for k,l in m_ind: m[k,l] = WORLD_MINE
-        else: # Assumes learn2exit mode otherwise
-            m[i,j] = WORLD_INVISIBLE_GOAL # Makes invisible goal in gap between rooms. Invisible so that agent learns to see the gap structure
-
+    def make_room_map(self, m, j):
         # Nose for fruit, can know number of fruits in the room
 
         ## first make index of room map
@@ -468,12 +456,32 @@ class RoomWorld(PuddleWorld):
         dummy_map = np.hstack([np.ones((m.shape[0],j)),2*np.ones((m.shape[0],self.n-j))])
         room_map[room_map==0] = dummy_map[room_map==0] 
 
+        return room_map
+
+    def make_goal_count_dict(self, m, room_map):
         ## Now make a count for each room index
         goal_count = room_map[m==WORLD_FRUIT] # eg [1,2,2,3] means 1 goal in room 1, 2 in room 2 and 1 in room 3
         self.goal_count_dict = {i+1:0 for i in range(self.num_rooms)}
         self.goal_count_dict[-1] = 0 # To catch exception where obstacle is centered in view
         for r in goal_count:
-            self.goal_count_dict[r] += 1   
+            self.goal_count_dict[r] += 1
+
+
+    def load_random_map(self):
+        # Returns random map with two rooms and the gap between them
+        m = np.zeros((self.n,self.n))
+        m[0,:] =  m[-1,:] =  m[:,0] = m[:,-1] = WORLD_OBSTACLE # Make Walls
+        i,j =  np.random.randint(1,self.n-1),np.random.randint(2,self.n-2) # pick random row and col to make exit between rooms
+        m[:,j] = WORLD_OBSTACLE # Makes intersecting wall
+        m[i,j] = WORLD_FREE # Makes gap between rooms
+        if self.mode == 'fruit':
+            m = self.assign_fruit_locations(m)
+        else: # Assumes learn2exit mode otherwise
+            # Makes invisible goal in gap between rooms.
+            # Invisible so that agent learns to see the gap structure
+            m[i,j] = WORLD_INVISIBLE_GOAL
+        room_map = self.make_room_map(m,j)
+        self.make_goal_count_dict(m, room_map)
 
         if np.random.randint(2): # like flipping a coin (bernoulli(0.5))
             m = m.T # transpose the Map to learn vertical representations as well.
@@ -484,7 +492,6 @@ class RoomWorld(PuddleWorld):
 
         self.gap_i = i
         self.gap_j = j
-
         self.room_map = room_map
 
         return m,[i,j]
@@ -539,6 +546,37 @@ class RoomWorldObject(RoomWorld):
         self.set_start_state(start_states,self.start_state_ind)
         self.set_term_state()
 
+class RoomWorldObjectFixed(RoomWorld):
+    ''' Bounded 2 Rooms w/exit. Same as before but not random at each run '''
+
+    def _step(self, action): # To set goal once all fruits are taken
+        # First take care of room index fruit counter
+        return_val = super(RoomWorldObjectFixed, self)._step(action) # state, reward, done, _
+        self.num_fruits_left -= self.found_fruit_in_last_turn # Reduce total fruit counter if fruit was found
+        if self.num_fruits_left <= 0: # set goal state to gap if no fruits in map
+            self.map[self.gap_i, self.gap_j] = WORLD_INVISIBLE_GOAL
+            self.set_term_state() # Refresh terminal state list after adding goal
+        return return_val
+
+    def reload_random(self): # redefine to stop fruit from being goal
+        m,[i,j] = self.load_random_map()
+        self.map = m
+        if self.mode == 'fruit':
+            start_states = [[i,j]]
+        else:
+            start_states = []
+        self.set_start_state(start_states,self.start_state_ind)
+        self.set_term_state()
+
+    def _reset(self):
+        # No longer Randomising map at each run
+        self.map = self.assign_fruit_locations(self.map)
+        # Reset Invisible GOal
+        self.map[self.gap_i, self.gap_j] = WORLD_FREE
+        self.make_goal_count_dict(self.map, self.room_map)
+        self.set_start_state([[self.gap_i, self.gap_j]],self.start_state_ind)
+        self.set_term_state()
+        return super(RoomWorld, self)._reset()
 
 class RoomWorldFinal(PuddleWorld):
     ''' Set of 6 rooms. Need to pick up all fruits and reach gap to complete task
