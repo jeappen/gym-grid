@@ -569,6 +569,8 @@ class RoomWorldObjectFixed(RoomWorld):
         self.set_term_state()
 
     def _reset(self):
+        # Clear up existing fruits
+        self.map[self.map==WORLD_FRUIT] = WORLD_FREE
         # No longer Randomising map at each run
         self.map = self.assign_fruit_locations(self.map)
         # Reset Invisible GOal
