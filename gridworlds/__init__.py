@@ -1,6 +1,5 @@
 from gym.envs.registration import register
 
-
 # using max_episode_steps for new API
 
 register(

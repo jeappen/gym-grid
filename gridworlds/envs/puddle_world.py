@@ -254,6 +254,7 @@ class PuddleWorld(gym.Env):
         return colour_view    
         
     def render(self, mode='rgb_array', n=None, close=None):
+        if close: return
         if n is None:
             n = 2
         if mode == 'rgb_array':
